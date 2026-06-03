@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Name Holder PDF Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root { --blue:#00457c; --border:#d8dde6; --bg:#f7f8fb; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:#1f2937; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px; }
+    .card { background:white; border:1px solid var(--border); border-radius:14px; padding:22px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+    h1 { margin:0 0 8px; font-size:28px; }
+    p { line-height:1.5; }
+    label { display:block; font-weight:700; margin:18px 0 7px; }
+    input[type="text"], select, textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #cbd5e1; border-radius:9px; font-size:15px; }
+    textarea { min-height:90px; }
+    input[type="file"] { width:100%; padding:10px; border:1px dashed #9ca3af; border-radius:9px; background:#fafafa; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+    button { margin-top:18px; padding:12px 16px; border:0; border-radius:10px; background:var(--blue); color:white; font-weight:700; cursor:pointer; font-size:15px; }
+    button.secondary { background:#475569; margin-left:8px; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .note { font-size:14px; color:#475569; background:#f1f5f9; border-radius:10px; padding:12px; }
+    .status { margin-top:14px; font-weight:700; }
+    table { border-collapse:collapse; width:100%; margin-top:12px; font-size:14px; }
+    th,td { border-bottom:1px solid #e5e7eb; padding:8px; text-align:left; }
+    .small { font-size:13px; color:#64748b; }
+    .hidden { display:none; }
+    @media (max-width:720px) { .grid { grid-template-columns: 1fr; } .wrap { padding:14px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Name Holder PDF Generator</h1>
+      <p class="note">Creates folded name-holder inserts: <b>210 × 122 mm flat</b>, folding to <b>210 × 61 mm per side</b>. The top side is rotated 180°. Upload a logo and participant list, then generate a print-ready or editable PDF.</p>
+
+      <label>Event title</label>
+      <textarea id="eventTitle">Enlargement that Delivers: The Role of Political Actors in Advancing EU
+Accession</textarea>
+      <p class="small">Line breaks are allowed. The title will be italic blue.</p>
+
+      <label>Logo image</label>
+      <input id="logoFile" type="file" accept="image/png,image/jpeg" />
+
+      <label>Participant list: Excel or CSV</label>
+      <input id="listFile" type="file" accept=".xlsx,.xls,.csv" />
+
+      <div id="columnControls" class="hidden">
+        <div class="grid">
+          <div>
+            <label>Name column</label>
+            <select id="nameColumn"></select>
+          </div>
+          <div>
+            <label>Organisation column</label>
+            <select id="orgColumn"></select>
+          </div>
+        </div>
+        <div id="preview"></div>
+      </div>
+
+      <button id="printPdfBtn" disabled>Generate print-ready PDF</button>
+      <button id="editablePdfBtn" class="secondary" disabled>Generate editable PDF</button>
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+
+<script>
+const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+const MM = 72 / 25.4;
+const W = 210 * MM;
+const PANEL_H = 61 * MM;
+const H = 122 * MM;
+const BLUE = rgb(0, 69/255, 124/255);
+const BLACK = rgb(0,0,0);
+let rows = [];
+let logoBytes = null;
+let logoType = null;
+
+const $ = id => document.getElementById(id);
+
+$('logoFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  logoBytes = new Uint8Array(await f.arrayBuffer());
+  logoType = f.type.includes('png') ? 'png' : 'jpg';
+  setStatus('Logo loaded.');
+  refreshButtons();
+});
+
+$('listFile').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const data = await f.arrayBuffer();
+  const wb = XLSX.read(data, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  if (!rows.length) { setStatus('No rows found in participant list.'); return; }
+  populateColumns(Object.keys(rows[0]));
+  $('columnControls').classList.remove('hidden');
+  showPreview();
+  setStatus(`${rows.length} participant rows loaded.`);
+  refreshButtons();
+});
+
+$('nameColumn').addEventListener('change', showPreview);
+$('orgColumn').addEventListener('change', showPreview);
+
+function populateColumns(cols) {
+  for (const id of ['nameColumn','orgColumn']) {
+    const sel = $(id); sel.innerHTML = '';
+    cols.forEach(c => { const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
+  }
+  const lower = cols.map(c => c.toLowerCase());
+  const nameIdx = lower.findIndex(c => c.includes('name'));
+  const orgIdx = lower.findIndex(c => c.includes('org') || c.includes('institution') || c.includes('party') || c.includes('company'));
+  if (nameIdx >= 0) $('nameColumn').selectedIndex = nameIdx;
+  if (orgIdx >= 0) $('orgColumn').selectedIndex = orgIdx;
+}
+
+function showPreview() {
+  if (!rows.length) return;
+  const ncol = $('nameColumn').value, ocol = $('orgColumn').value;
+  const sample = rows.slice(0,5).map(r => `<tr><td>${escapeHtml(r[ncol]||'')}</td><td>${escapeHtml(r[ocol]||'')}</td></tr>`).join('');
+  $('preview').innerHTML = `<label>Preview</label><table><thead><tr><th>Name</th><th>Organisation</th></tr></thead><tbody>${sample}</tbody></table>`;
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function setStatus(msg) { $('status').textContent = msg; }
+function refreshButtons() { const ok = rows.length > 0; $('printPdfBtn').disabled = !ok; $('editablePdfBtn').disabled = !ok; }
+function participantData() { const n=$('nameColumn').value, o=$('orgColumn').value; return rows.map(r => ({ name:String(r[n]||'').trim(), org:String(r[o]||'').trim() })).filter(r => r.name || r.org); }
+
+function fitFont(text, font, maxWidth, start, min) {
+  let size = start;
+  while (size > min && font.widthOfTextAtSize(text, size) > maxWidth) size -= 1;
+  return size;
+}
+
+async function embedLogo(pdfDoc) {
+  if (!logoBytes) return null;
+  try { return logoType === 'png' ? await pdfDoc.embedPng(logoBytes) : await pdfDoc.embedJpg(logoBytes); }
+  catch(e) { setStatus('Logo could not be embedded. The PDF will be generated without it.'); return null; }
+}
+
+function drawTextCenter(page, text, font, size, xCenter, y, opts={}) {
+  const width = font.widthOfTextAtSize(text, size);
+  page.drawText(text, { x:xCenter-width/2, y, size, font, color:opts.color||BLACK, rotate:opts.rotate||degrees(0) });
+}
+
+function drawRotatedTextCenter(page, text, font, size, xCenter, yFromTop, opts={}) {
+  const width = font.widthOfTextAtSize(text, size);
+  // Desired visual center in top panel local coords; rotate text 180 so it reads after folding.
+  const x = W - (xCenter - width/2);
+  const y = H - yFromTop;
+  page.drawText(text, { x, y, size, font, color:opts.color||BLACK, rotate:degrees(180) });
+}
+
+function drawMultilineEvent(page, lines, font, size, x, y, maxWidth, rotated=false) {
+  const lineGap = size * 1.18;
+  lines.forEach((line, i) => {
+    const w = font.widthOfTextAtSize(line, size);
+    if (rotated) page.drawText(line, { x: W - (x - w/2), y: H - (y - i*lineGap), size, font, color:BLUE, rotate:degrees(180) });
+    else page.drawText(line, { x: x - w/2, y: y - i*lineGap, size, font, color:BLUE });
+  });
+}
+
+function wrapEventText(text, font, size, maxWidth) {
+  const raw = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const lines = [];
+  for (const para of raw) {
+    let cur='';
+    for (const word of para.split(/\s+/)) {
+      const test = cur ? cur + ' ' + word : word;
+      if (font.widthOfTextAtSize(test, size) <= maxWidth) cur = test;
+      else { if (cur) lines.push(cur); cur = word; }
+    }
+    if (cur) lines.push(cur);
+  }
+  return lines.slice(0,3);
+}
+
+async function buildPdf(editable=false) {
+  const data = participantData();
+  if (!data.length) throw new Error('No participant data selected.');
+  const pdfDoc = await PDFDocument.create();
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const italic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const logo = await embedLogo(pdfDoc);
+  let form = editable ? pdfDoc.getForm() : null;
+  const eventText = $('eventTitle').value.trim();
+  const eventFontSize = 9.5;
+  const logoW = 23*MM, logoH = logo ? logoW * (logo.height/logo.width) : 0;
+  const logoX = 18*MM;
+  const eventLeft = logo ? 45*MM : 12*MM;
+  const eventRight = 198*MM;
+  const eventCenter = (eventLeft + eventRight)/2;
+  const eventMaxWidth = eventRight - eventLeft;
+  const eventLines = wrapEventText(eventText, italic, eventFontSize, eventMaxWidth);
+
+  data.forEach((p, idx) => {
+    const page = pdfDoc.addPage([W, H]);
+    page.drawRectangle({ x:0.75*MM, y:0.75*MM, width:W-1.5*MM, height:H-1.5*MM, borderColor:rgb(.2,.2,.2), borderWidth:.35 });
+
+    // Bottom panel, right-side-up
+    if (logo) page.drawImage(logo, { x:logoX, y:16*MM, width:logoW, height:logoH });
+    drawMultilineEvent(page, eventLines, italic, eventFontSize, eventCenter, 19*MM, eventMaxWidth, false);
+
+    // Top panel, rotated 180. Local coordinates are measured from the top edge after folding.
+    if (logo) page.drawImage(logo, { x:W-logoX-logoW, y:H-16*MM-logoH, width:logoW, height:logoH, rotate:degrees(180) });
+    drawMultilineEvent(page, eventLines, italic, eventFontSize, eventCenter, 19*MM, eventMaxWidth, true);
+
+    const nameSize = fitFont(p.name, bold, 160*MM, 31, 14);
+    const orgSize = fitFont(p.org, bold, 160*MM, 17, 9);
+
+    if (!editable) {
+      drawTextCenter(page, p.name, bold, nameSize, W/2, 36*MM);
+      drawTextCenter(page, p.org, bold, orgSize, W/2, 27*MM);
+      drawRotatedTextCenter(page, p.name, bold, nameSize, W/2, 36*MM);
+      drawRotatedTextCenter(page, p.org, bold, orgSize, W/2, 27*MM);
+    } else {
+      const nameField = form.createTextField(`name_${idx+1}`);
+      nameField.setText(p.name);
+      nameField.addToPage(page, { x:20*MM, y:34*MM, width:170*MM, height:10*MM, textColor:BLACK, font:bold, fontSize:nameSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(0) });
+      nameField.addToPage(page, { x:20*MM, y:H-44*MM, width:170*MM, height:10*MM, textColor:BLACK, font:bold, fontSize:nameSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(180) });
+      nameField.enableReadOnly(); nameField.disableReadOnly();
+      const orgField = form.createTextField(`organisation_${idx+1}`);
+      orgField.setText(p.org);
+      orgField.addToPage(page, { x:30*MM, y:25*MM, width:150*MM, height:7*MM, textColor:BLACK, font:bold, fontSize:orgSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(0) });
+      orgField.addToPage(page, { x:30*MM, y:H-32*MM, width:150*MM, height:7*MM, textColor:BLACK, font:bold, fontSize:orgSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(180) });
+    }
+  });
+  if (editable && form) form.updateFieldAppearances(bold);
+  return await pdfDoc.save();
+}
+
+async function downloadPdf(editable) {
+  try {
+    setStatus('Generating PDF...');
+    const bytes = await buildPdf(editable);
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = editable ? 'name_holders_editable.pdf' : 'name_holders_print_ready.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('PDF generated and downloaded.');
+  } catch (err) { console.error(err); setStatus('Error: ' + err.message); }
+}
+
+$('printPdfBtn').addEventListener('click', () => downloadPdf(false));
+$('editablePdfBtn').addEventListener('click', () => downloadPdf(true));
+</script>
+</body>
+</html>
