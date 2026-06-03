@@ -11,7 +11,7 @@
     :root { --blue:#00457c; --border:#d8dde6; --bg:#f7f8fb; --text:#172033; --muted:#64748b; }
     * { box-sizing:border-box; }
     body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
-    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    .wrap { max-width: 1360px; margin: 0 auto; padding: 28px; }
     .card { background:white; border:1px solid var(--border); border-radius:18px; padding:24px; box-shadow:0 8px 26px rgba(15,23,42,.06); }
     h1 { margin:0 0 8px; font-size:28px; letter-spacing:-.02em; }
     h2 { margin:26px 0 6px; font-size:18px; }
@@ -23,7 +23,7 @@
     input[type="range"] { width:100%; }
     .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
     .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:18px; }
-    .layout { display:grid; grid-template-columns: 1.05fr .95fr; gap:22px; align-items:start; }
+    .layout { display:grid; grid-template-columns: minmax(520px, 1fr) minmax(560px, .95fr); gap:28px; align-items:start; }
     .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:22px; }
     button { padding:13px 18px; border:0; border-radius:11px; background:var(--blue); color:white; font-weight:700; cursor:pointer; font-size:15px; }
     button.secondary { background:#334155; }
@@ -38,12 +38,10 @@
     .controlRow { display:grid; grid-template-columns: 1fr 68px; gap:10px; align-items:center; }
     .previewCard { position:sticky; top:18px; }
     .previewHead { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
-    .sheetWrap { width:100%; border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; padding:12px; overflow:hidden; }
+    .sheetWrap { width:100%; border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; padding:14px; overflow:hidden; }
     .sheet { width:100%; aspect-ratio: 210 / 122; background:#fff; border:1.2px solid #222; position:relative; box-shadow:0 8px 24px rgba(15,23,42,.08); }
-    .panel { position:absolute; left:0; width:100%; height:50%; overflow:hidden; }
-    .panel.top { top:0; transform:rotate(180deg); transform-origin:center center; }
-    .panel.bottom { bottom:0; }
-    .cutMid { position:absolute; left:0; right:0; top:50%; height:0; border-top:1px dashed rgba(0,0,0,.12); pointer-events:none; }
+    .previewSvg { width:100%; height:100%; display:block; background:#fff; }
+    .previewSvg text { paint-order:stroke; stroke:white; stroke-width:.18px; stroke-linejoin:round; }
     .accent { position:absolute; left:8.6%; right:8.6%; bottom:34%; height:1px; opacity:.38; }
     .brand { position:absolute; left:9.5%; bottom:10%; width:82%; display:flex; align-items:center; gap:3.5%; }
     .brandLogo { width:18%; max-height:40px; object-fit:contain; }
@@ -64,7 +62,8 @@
         <p class="note">Final polished <b>print-ready</b> PDF generator. Size stays <b>210 x 122 mm flat</b>, folding to <b>210 x 61 mm per side</b>. The top side is rotated automatically.</p>
 
         <label>Event title</label>
-        <textarea id="eventTitle"></textarea>
+        <textarea id="eventTitle">Enlargement that Delivers: The Role of Political Actors in Advancing EU
+Accession</textarea>
         <p class="small">Line breaks are supported. The title will be italic blue and wraps automatically.</p>
 
         <div class="grid">
@@ -162,9 +161,7 @@
         </div>
         <div class="sheetWrap">
           <div class="sheet">
-            <div class="panel top" id="prevTop"></div>
-            <div class="panel bottom" id="prevBottom"></div>
-            <div class="cutMid"></div>
+            <svg id="previewSvg" class="previewSvg" viewBox="0 0 210 122" preserveAspectRatio="xMidYMid meet" aria-label="Name holder live preview"></svg>
           </div>
         </div>
         <p class="small">The PDF remains the source of truth, but this preview helps catch spacing issues before generating all pages.</p>
@@ -278,29 +275,92 @@ $('recommendedBtn')?.addEventListener('click', () => {
   setPair('yShift', 0); setPair('brandShift', 0); $('eventLines').value = '2'; $('borderStyle').value = 'light';
   $('drawAccentLine').checked = true; $('drawFoldMarks').checked = false; updateLivePreview(); setStatus('Recommended settings applied.');
 });
+function previewWrapText(text, maxCharsPerLine, maxLines) {
+  const paragraphs = String(text || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (const para of paragraphs) {
+    let line = '';
+    for (const word of para.split(/\s+/)) {
+      const test = line ? line + ' ' + word : word;
+      if (test.length <= maxCharsPerLine) line = test;
+      else { if (line) out.push(line); line = word; }
+      if (out.length >= maxLines) break;
+    }
+    if (line && out.length < maxLines) out.push(line);
+    if (out.length >= maxLines) break;
+  }
+  return out.length ? out : [''];
+}
+function svgEsc(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+function approxNeedsFit(text, fontSizeMm, maxWidthMm, weightFactor=.58) {
+  return String(text || '').length * fontSizeMm * weightFactor > maxWidthMm;
+}
 function updateLivePreview() {
   const p = sampleParticipant();
   const accent = $('accentColor').value || '#00457c';
   document.documentElement.style.setProperty('--blue', accent);
-  const logoW = parseFloat($('logoMm').value || 24);
-  const eventSize = parseFloat($('eventSize').value || 8.8);
-  const nameMax = parseFloat($('nameMax').value || 36);
-  const orgMax = parseFloat($('orgMax').value || 13.5);
+
+  const svg = $('previewSvg');
+  if (!svg) return;
+  const bs = $('borderStyle')?.value || 'cut';
+  const borderColor = bs === 'none' ? 'transparent' : (bs === 'light' ? '#b8c1cc' : '#222');
+  document.querySelector('.sheet').style.border = bs === 'none' ? '0' : (bs === 'light' ? '1px solid #b8c1cc' : '1.2px solid #222');
+
+  const logoMm = parseFloat($('logoMm').value || 26);
+  const eventSizePt = parseFloat($('eventSize').value || 8.0);
+  const nameUserMax = parseFloat($('nameMax').value || 36);
+  const orgMaxPt = parseFloat($('orgMax').value || 13.5);
   const yShift = parseFloat($('yShift').value || 0);
   const brandShift = parseFloat($('brandShift').value || 0);
-  const eventHtml = escapeHtml($('eventTitle').value.trim()).replace(/\n/g,'<br>');
-  const logoTag = logoDataUrl ? `<img class="brandLogo" style="width:${logoW/210*100}%;" src="${logoDataUrl}">` : '';
-  const sheet = document.querySelector('.sheet');
-  if (sheet) {
-    const bs = $('borderStyle')?.value || 'cut';
-    sheet.style.border = bs === 'none' ? '0' : (bs === 'light' ? '1px solid #b8c1cc' : '1.2px solid #222');
+  const name = normalizedName(p.name || 'NAME SURNAME');
+  const org = p.org || 'Organisation Name';
+  const eventRaw = $('eventTitle').value.trim();
+  const maxEventLines = parseInt($('eventLines')?.value || '2', 10);
+
+  // Convert PDF point sizes to SVG mm units, so the preview reflects the output better.
+  const namePt = adaptiveNameMax(name, nameUserMax);
+  const nameMm = Math.max(8.2, Math.min(15.6, namePt / MM));
+  const orgMm = Math.max(3.2, Math.min(5.4, orgMaxPt / MM));
+  const eventMm = Math.max(2.2, Math.min(4.0, eventSizePt / MM));
+
+  const logoW = logoDataUrl ? logoMm : 0;
+  const logoH = logoDataUrl ? Math.min(13, logoMm * 0.55) : 0;
+  const logoX = 18;
+  const logoY = 61 - (6.2 + brandShift) - logoH;
+  const titleX = logoDataUrl ? (logoX + logoW + 5) : 105;
+  const titleW = logoDataUrl ? (210 - titleX - 18) : 174;
+  const titleCx = titleX + titleW / 2;
+  const eventLines = previewWrapText(eventRaw, logoDataUrl ? 72 : 92, maxEventLines);
+  const eventY0 = 61 - (13.4 + brandShift) - (eventLines.length - 1) * eventMm * .65;
+  const nameY = 61 - (35 + yShift);
+  const orgY = 61 - (27 + yShift);
+  const lineY = 61 - (21.1 + brandShift);
+
+  const nameFitAttr = approxNeedsFit(name, nameMm, 174, .62) ? ` textLength="174" lengthAdjust="spacingAndGlyphs"` : '';
+  const orgLines = previewWrapText(org, 58, 2);
+  const orgFitAttrs = orgLines.map(line => approxNeedsFit(line, orgMm, 174, .54) ? ` textLength="174" lengthAdjust="spacingAndGlyphs"` : '');
+
+  function panelMarkup() {
+    const logoTag = logoDataUrl ? `<image href="${logoDataUrl}" x="${logoX}" y="${logoY}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : '';
+    const titleTags = eventLines.map((line, i) => `<text x="${titleCx}" y="${eventY0 + i * eventMm * 1.18}" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="${eventMm}" fill="${accent}">${svgEsc(line)}</text>`).join('');
+    const orgTags = orgLines.map((line, i) => `<text x="105" y="${orgY + i * orgMm * 1.18}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${orgMm}" fill="#555"${orgFitAttrs[i] || ''}>${svgEsc(line)}</text>`).join('');
+    return `
+      ${$('drawAccentLine').checked ? `<line x1="18" y1="${lineY}" x2="192" y2="${lineY}" stroke="${accent}" stroke-width="0.35" opacity="0.32"/>` : ''}
+      ${logoTag}
+      ${titleTags}
+      <text x="105" y="${nameY}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${nameMm}" fill="#111827"${nameFitAttr}>${svgEsc(name)}</text>
+      ${orgTags}`;
   }
-  const panel = () => `
-    ${$('drawAccentLine').checked ? `<div class="accent" style="background:${accent}; bottom:${34+brandShift*0.75}%;"></div>` : ''}
-    <div class="person" style="bottom:${42+yShift*0.75}%;"><div class="pname" style="font-size:clamp(19px, ${nameMax/36*5.05}vw, ${nameMax*1.45}px);">${escapeHtml(normalizedName(p.name))}</div><div class="porg" style="font-size:clamp(8px, ${orgMax/13.5*1.5}vw, ${orgMax*1.25}px);">${escapeHtml(p.org)}</div></div>
-    <div class="brand" style="bottom:${10+brandShift*0.75}%;">${logoTag}<div class="brandTitle" style="font-size:clamp(8px, ${eventSize/8.8*1.3}vw, ${eventSize*1.7}px);">${eventHtml}</div></div>`;
-  $('prevTop').innerHTML = panel();
-  $('prevBottom').innerHTML = panel();
+
+  const foldMarks = $('drawFoldMarks').checked ? `<line x1="0" y1="61" x2="5" y2="61" stroke="#777" stroke-width="0.25"/><line x1="205" y1="61" x2="210" y2="61" stroke="#777" stroke-width="0.25"/>` : '';
+  svg.innerHTML = `
+    <rect x="0" y="0" width="210" height="122" fill="#fff"/>
+    ${bs !== 'none' ? `<rect x="0.75" y="0.75" width="208.5" height="120.5" fill="none" stroke="${borderColor}" stroke-width="0.35"/>` : ''}
+    <g transform="translate(210 61) rotate(180)">${panelMarkup()}</g>
+    <g transform="translate(0 61)">${panelMarkup()}</g>
+    <line x1="0" y1="61" x2="210" y2="61" stroke="rgba(0,0,0,.15)" stroke-width="0.18" stroke-dasharray="2 2"/>
+    ${foldMarks}`;
+
   checkLayoutWarning(p);
 }
 function checkLayoutWarning(p) {
