@@ -3,68 +3,173 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Name Holder PDF Generator</title>
+  <title>Name Holder Generator - Final Print Ready</title>
   <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
-    :root { --blue:#00457c; --border:#d8dde6; --bg:#f7f8fb; }
-    body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:#1f2937; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 28px; }
-    .card { background:white; border:1px solid var(--border); border-radius:14px; padding:22px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
-    h1 { margin:0 0 8px; font-size:28px; }
+    :root { --blue:#00457c; --border:#d8dde6; --bg:#f7f8fb; --text:#172033; --muted:#64748b; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    .card { background:white; border:1px solid var(--border); border-radius:18px; padding:24px; box-shadow:0 8px 26px rgba(15,23,42,.06); }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:-.02em; }
+    h2 { margin:26px 0 6px; font-size:18px; }
     p { line-height:1.5; }
-    label { display:block; font-weight:700; margin:18px 0 7px; }
-    input[type="text"], select, textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #cbd5e1; border-radius:9px; font-size:15px; }
-    textarea { min-height:90px; }
-    input[type="file"] { width:100%; padding:10px; border:1px dashed #9ca3af; border-radius:9px; background:#fafafa; }
+    label { display:block; font-weight:700; margin:16px 0 7px; }
+    input[type="text"], input[type="number"], select, textarea { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; font-size:15px; background:white; }
+    textarea { min-height:88px; resize:vertical; }
+    input[type="file"] { width:100%; padding:11px; border:1px dashed #9ca3af; border-radius:10px; background:#fafafa; }
+    input[type="range"] { width:100%; }
     .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
-    button { margin-top:18px; padding:12px 16px; border:0; border-radius:10px; background:var(--blue); color:white; font-weight:700; cursor:pointer; font-size:15px; }
-    button.secondary { background:#475569; margin-left:8px; }
+    .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:18px; }
+    .layout { display:grid; grid-template-columns: 1.05fr .95fr; gap:22px; align-items:start; }
+    .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:22px; }
+    button { padding:13px 18px; border:0; border-radius:11px; background:var(--blue); color:white; font-weight:700; cursor:pointer; font-size:15px; }
+    button.secondary { background:#334155; }
     button:disabled { opacity:.45; cursor:not-allowed; }
-    .note { font-size:14px; color:#475569; background:#f1f5f9; border-radius:10px; padding:12px; }
+    .note { font-size:14px; color:#475569; background:#f1f5f9; border-radius:12px; padding:13px; }
     .status { margin-top:14px; font-weight:700; }
     table { border-collapse:collapse; width:100%; margin-top:12px; font-size:14px; }
     th,td { border-bottom:1px solid #e5e7eb; padding:8px; text-align:left; }
-    .small { font-size:13px; color:#64748b; }
+    .small { font-size:13px; color:var(--muted); }
     .hidden { display:none; }
-    @media (max-width:720px) { .grid { grid-template-columns: 1fr; } .wrap { padding:14px; } }
+    .toggleRow { display:flex; gap:10px; align-items:center; margin-top:12px; color:#334155; font-size:14px; }
+    .controlRow { display:grid; grid-template-columns: 1fr 68px; gap:10px; align-items:center; }
+    .previewCard { position:sticky; top:18px; }
+    .previewHead { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+    .sheetWrap { width:100%; border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; padding:12px; overflow:hidden; }
+    .sheet { width:100%; aspect-ratio: 210 / 122; background:#fff; border:1.2px solid #222; position:relative; box-shadow:0 8px 24px rgba(15,23,42,.08); }
+    .panel { position:absolute; left:0; width:100%; height:50%; overflow:hidden; }
+    .panel.top { top:0; transform:rotate(180deg); transform-origin:center center; }
+    .panel.bottom { bottom:0; }
+    .cutMid { position:absolute; left:0; right:0; top:50%; height:0; border-top:1px dashed rgba(0,0,0,.12); pointer-events:none; }
+    .accent { position:absolute; left:8.6%; right:8.6%; bottom:34%; height:1px; opacity:.38; }
+    .brand { position:absolute; left:9.5%; bottom:10%; width:82%; display:flex; align-items:center; gap:3.5%; }
+    .brandLogo { width:18%; max-height:40px; object-fit:contain; }
+    .brandTitle { flex:1; text-align:center; font-family: Georgia, 'Times New Roman', serif; font-style:italic; color:var(--blue); font-size:clamp(8px, 1.3vw, 15px); line-height:1.15; }
+    .person { position:absolute; left:8%; right:8%; bottom:42%; text-align:center; }
+    .pname { font-weight:900; line-height:1; letter-spacing:.01em; font-size:clamp(17px, 4.3vw, 46px); white-space:nowrap; }
+    .porg { margin-top:5px; font-weight:700; color:#555; line-height:1.12; font-size:clamp(8px, 1.5vw, 17px); }
+    .warn { color:#b45309; background:#fffbeb; border:1px solid #fde68a; padding:10px 12px; border-radius:12px; display:none; margin-top:10px; }
+    @media (max-width:940px) { .layout { grid-template-columns:1fr; } .previewCard { position:static; } }
+    @media (max-width:720px) { .grid, .grid3 { grid-template-columns: 1fr; } .wrap { padding:14px; } }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>Name Holder PDF Generator</h1>
-      <p class="note">Creates folded name-holder inserts: <b>210 × 122 mm flat</b>, folding to <b>210 × 61 mm per side</b>. The top side is rotated 180°. Upload a logo and participant list, then generate a print-ready or editable PDF.</p>
+    <div class="layout">
+      <div class="card">
+        <h1>Name Holder Generator</h1>
+        <p class="note">Final polished <b>print-ready</b> PDF generator. Size stays <b>210 x 122 mm flat</b>, folding to <b>210 x 61 mm per side</b>. The top side is rotated automatically.</p>
 
-      <label>Event title</label>
-      <textarea id="eventTitle">Enlargement that Delivers: The Role of Political Actors in Advancing EU
+        <label>Event title</label>
+        <textarea id="eventTitle">Enlargement that Delivers: The Role of Political Actors in Advancing EU
 Accession</textarea>
-      <p class="small">Line breaks are allowed. The title will be italic blue.</p>
+        <p class="small">Line breaks are supported. The title will be italic blue and wraps automatically.</p>
 
-      <label>Logo image</label>
-      <input id="logoFile" type="file" accept="image/png,image/jpeg" />
-
-      <label>Participant list: Excel or CSV</label>
-      <input id="listFile" type="file" accept=".xlsx,.xls,.csv" />
-
-      <div id="columnControls" class="hidden">
         <div class="grid">
           <div>
-            <label>Name column</label>
-            <select id="nameColumn"></select>
+            <label>Logo image</label>
+            <input id="logoFile" type="file" accept="image/png,image/jpeg" />
+            <p class="small">PNG or JPG. Transparent PNG works best.</p>
           </div>
           <div>
-            <label>Organisation column</label>
-            <select id="orgColumn"></select>
+            <label>Participant list: Excel or CSV</label>
+            <input id="listFile" type="file" accept=".xlsx,.xls,.csv" />
+            <p class="small">Use one row per participant.</p>
           </div>
         </div>
-        <div id="preview"></div>
+
+        <div id="columnControls" class="hidden">
+          <h2>Participant columns</h2>
+          <div class="grid">
+            <div>
+              <label>Name column</label>
+              <select id="nameColumn"></select>
+            </div>
+            <div>
+              <label>Organisation column</label>
+              <select id="orgColumn"></select>
+            </div>
+          </div>
+
+          <h2>Design controls</h2>
+          <div class="grid3">
+            <div>
+              <label>Design theme</label>
+              <select id="themeSelect">
+                <option value="ndi" selected>Classic NDI blue</option>
+                <option value="formal">Formal navy</option>
+                <option value="minimal">Minimal black/white</option>
+                <option value="modern">Modern blue</option>
+                <option value="elegantRed">Elegant red</option>
+                <option value="ndiNavy">NDI navy + soft line</option>
+              </select>
+            </div>
+            <div>
+              <label>Accent color</label>
+              <input id="accentColor" type="text" value="#00457c" />
+            </div>
+            <div>
+              <label>Name style</label>
+              <select id="nameStyle">
+                <option value="upper">UPPERCASE</option>
+                <option value="original" selected>Original case</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid3">
+            <div><label>Logo width (mm)</label><div class="controlRow"><input id="logoMm" type="range" min="10" max="34" step="1" value="26"><input id="logoMmNum" type="number" min="10" max="34" value="26"></div></div>
+            <div><label>Event font size</label><div class="controlRow"><input id="eventSize" type="range" min="6.2" max="10.8" step="0.2" value="8.0"><input id="eventSizeNum" type="number" min="6.2" max="10.8" step="0.2" value="8.0"></div></div>
+            <div><label>Name max size</label><div class="controlRow"><input id="nameMax" type="range" min="22" max="35" step="0.5" value="31"><input id="nameMaxNum" type="number" min="22" max="35" step="0.5" value="31"></div></div>
+          </div>
+          <div class="grid3">
+            <div><label>Organisation max size</label><div class="controlRow"><input id="orgMax" type="range" min="9" max="16" step="0.5" value="13.5"><input id="orgMaxNum" type="number" min="9" max="16" step="0.5" value="13.5"></div></div>
+            <div><label>Text vertical shift (mm)</label><div class="controlRow"><input id="yShift" type="range" min="-5" max="5" step="0.5" value="0"><input id="yShiftNum" type="number" min="-5" max="5" step="0.5" value="0"></div></div>
+            <div><label>Logo/title shift (mm)</label><div class="controlRow"><input id="brandShift" type="range" min="-4" max="4" step="0.5" value="0"><input id="brandShiftNum" type="number" min="-4" max="4" step="0.5" value="0"></div></div>
+          </div>
+          <div class="grid3">
+            <div>
+              <label>Event title max lines</label>
+              <select id="eventLines"><option value="2" selected>2 lines</option><option value="3">3 lines</option></select>
+            </div>
+            <div>
+              <label>Border style</label>
+              <select id="borderStyle"><option value="cut" selected>Thin cut border</option><option value="light">Light grey border</option><option value="none">No border</option></select>
+            </div>
+            <div style="display:flex; align-items:end;"><button id="recommendedBtn" type="button" class="secondary" style="width:100%;">Recommended settings</button></div>
+          </div>
+          <div class="toggleRow"><input id="drawAccentLine" type="checkbox" checked /> <span>Add subtle accent line above logo/event title</span></div>
+          <div class="toggleRow"><input id="drawFoldMarks" type="checkbox" /> <span>Add tiny fold marks at the sides</span></div>
+          <div id="layoutWarning" class="warn"></div>
+
+          <h2>Participant preview</h2>
+          <div id="preview"></div>
+        </div>
+
+        <div class="actions">
+          <button id="testPdfBtn" class="secondary" disabled>Generate test page only</button>
+          <button id="printPdfBtn" disabled>Generate full print-ready PDF</button>
+        </div>
+        <div id="status" class="status"></div>
       </div>
 
-      <button id="printPdfBtn" disabled>Generate print-ready PDF</button>
-      <button id="editablePdfBtn" class="secondary" disabled>Generate editable PDF</button>
-      <div id="status" class="status"></div>
+      <div class="card previewCard">
+        <div class="previewHead">
+          <h2 style="margin-top:0">Live design preview</h2>
+          <span class="small">First participant</span>
+        </div>
+        <div class="sheetWrap">
+          <div class="sheet">
+            <div class="panel top" id="prevTop"></div>
+            <div class="panel bottom" id="prevBottom"></div>
+            <div class="cutMid"></div>
+          </div>
+        </div>
+        <p class="small">The PDF remains the source of truth, but this preview helps catch spacing issues before generating all pages.</p>
+      </div>
     </div>
   </div>
 
@@ -74,21 +179,29 @@ const MM = 72 / 25.4;
 const W = 210 * MM;
 const PANEL_H = 61 * MM;
 const H = 122 * MM;
-const BLUE = rgb(0, 69/255, 124/255);
 const BLACK = rgb(0,0,0);
+const GREY = rgb(0.32,0.35,0.39);
 let rows = [];
 let logoBytes = null;
 let logoType = null;
+let logoDataUrl = '';
 
 const $ = id => document.getElementById(id);
+const bindPairs = [['logoMm','logoMmNum'],['eventSize','eventSizeNum'],['nameMax','nameMaxNum'],['orgMax','orgMaxNum'],['yShift','yShiftNum'],['brandShift','brandShiftNum']];
+bindPairs.forEach(([a,b]) => {
+  $(a).addEventListener('input', () => { $(b).value = $(a).value; updateLivePreview(); });
+  $(b).addEventListener('input', () => { $(a).value = $(b).value; updateLivePreview(); });
+});
+['eventTitle','accentColor','nameStyle','drawAccentLine','themeSelect','eventLines','borderStyle'].forEach(id => $(id).addEventListener('input', () => { if (id==='themeSelect') applyTheme(); updateLivePreview(); }));
 
 $('logoFile').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
   logoBytes = new Uint8Array(await f.arrayBuffer());
   logoType = f.type.includes('png') ? 'png' : 'jpg';
+  logoDataUrl = await fileToDataUrl(f);
   setStatus('Logo loaded.');
-  refreshButtons();
+  updateLivePreview();
 });
 
 $('listFile').addEventListener('change', async e => {
@@ -102,75 +215,111 @@ $('listFile').addEventListener('change', async e => {
   populateColumns(Object.keys(rows[0]));
   $('columnControls').classList.remove('hidden');
   showPreview();
+  updateLivePreview();
   setStatus(`${rows.length} participant rows loaded.`);
-  refreshButtons();
+  $('printPdfBtn').disabled = false;
+  $('testPdfBtn').disabled = false;
 });
 
-$('nameColumn').addEventListener('change', showPreview);
-$('orgColumn').addEventListener('change', showPreview);
+$('nameColumn').addEventListener('change', () => { showPreview(); updateLivePreview(); });
+$('orgColumn').addEventListener('change', () => { showPreview(); updateLivePreview(); });
 
+function fileToDataUrl(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); }); }
 function populateColumns(cols) {
   for (const id of ['nameColumn','orgColumn']) {
     const sel = $(id); sel.innerHTML = '';
     cols.forEach(c => { const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
   }
   const lower = cols.map(c => c.toLowerCase());
-  const nameIdx = lower.findIndex(c => c.includes('name'));
-  const orgIdx = lower.findIndex(c => c.includes('org') || c.includes('institution') || c.includes('party') || c.includes('company'));
-  if (nameIdx >= 0) $('nameColumn').selectedIndex = nameIdx;
-  if (orgIdx >= 0) $('orgColumn').selectedIndex = orgIdx;
+  const nameWords = ['full name','name surname','participant','name','ime','prezime'];
+  const orgWords = ['organisation','organization','institution','org','party','company','foundation','institute','affiliation'];
+  let nameIdx = lower.findIndex(c => nameWords.some(w => c.includes(w)));
+  let orgIdx = lower.findIndex(c => orgWords.some(w => c.includes(w)));
+  if (nameIdx < 0) nameIdx = 0;
+  if (orgIdx < 0) orgIdx = Math.min(1, cols.length - 1);
+  $('nameColumn').selectedIndex = nameIdx;
+  $('orgColumn').selectedIndex = orgIdx;
 }
-
 function showPreview() {
   if (!rows.length) return;
   const ncol = $('nameColumn').value, ocol = $('orgColumn').value;
-  const sample = rows.slice(0,5).map(r => `<tr><td>${escapeHtml(r[ncol]||'')}</td><td>${escapeHtml(r[ocol]||'')}</td></tr>`).join('');
-  $('preview').innerHTML = `<label>Preview</label><table><thead><tr><th>Name</th><th>Organisation</th></tr></thead><tbody>${sample}</tbody></table>`;
+  const sample = rows.slice(0,6).map(r => `<tr><td>${escapeHtml(r[ncol]||'')}</td><td>${escapeHtml(r[ocol]||'')}</td></tr>`).join('');
+  $('preview').innerHTML = `<table><thead><tr><th>Name</th><th>Organisation</th></tr></thead><tbody>${sample}</tbody></table>`;
 }
-
-function escapeHtml(s) { return String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function escapeHtml(s) { return String(s).replace(/[&<>\"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
 function setStatus(msg) { $('status').textContent = msg; }
-function refreshButtons() { const ok = rows.length > 0; $('printPdfBtn').disabled = !ok; $('editablePdfBtn').disabled = !ok; }
-function participantData() { const n=$('nameColumn').value, o=$('orgColumn').value; return rows.map(r => ({ name:String(r[n]||'').trim(), org:String(r[o]||'').trim() })).filter(r => r.name || r.org); }
-
+function participantData() {
+  if (!rows.length) return [];
+  const n=$('nameColumn').value, o=$('orgColumn').value;
+  return rows.map(r => ({ name:String(r[n]||'').trim(), org:String(r[o]||'').trim() })).filter(r => r.name || r.org);
+}
+function sampleParticipant() {
+  const data = participantData();
+  return data[0] || { name:'NAME SURNAME', org:'Organisation Name' };
+}
+function normalizedName(name) { return $('nameStyle').value === 'upper' ? String(name).toLocaleUpperCase() : String(name); }
+function hexToRgb(hex) {
+  const m = String(hex).trim().match(/^#?([0-9a-fA-F]{6})$/);
+  if (!m) return rgb(0,69/255,124/255);
+  const v = m[1];
+  return rgb(parseInt(v.slice(0,2),16)/255, parseInt(v.slice(2,4),16)/255, parseInt(v.slice(4,6),16)/255);
+}
+function applyTheme() {
+  const t = $('themeSelect').value;
+  if (t === 'ndi') $('accentColor').value = '#00457c';
+  if (t === 'formal') $('accentColor').value = '#002b5c';
+  if (t === 'minimal') $('accentColor').value = '#222222';
+  if (t === 'modern') $('accentColor').value = '#0f5e9c';
+  if (t === 'elegantRed') $('accentColor').value = '#b84a3b';
+  if (t === 'ndiNavy') $('accentColor').value = '#003b6f';
+}
+function setPair(id, val) { $(id).value = val; const n = $(id+'Num'); if (n) n.value = val; }
+$('recommendedBtn')?.addEventListener('click', () => {
+  setPair('logoMm', 26); setPair('eventSize', 8.0); setPair('nameMax', 31); setPair('orgMax', 13);
+  setPair('yShift', 0); setPair('brandShift', 0); $('eventLines').value = '2'; $('borderStyle').value = 'light';
+  $('drawAccentLine').checked = true; $('drawFoldMarks').checked = false; updateLivePreview(); setStatus('Recommended settings applied.');
+});
+function updateLivePreview() {
+  const p = sampleParticipant();
+  const accent = $('accentColor').value || '#00457c';
+  document.documentElement.style.setProperty('--blue', accent);
+  const logoW = parseFloat($('logoMm').value || 24);
+  const eventSize = parseFloat($('eventSize').value || 8.8);
+  const nameMax = parseFloat($('nameMax').value || 31);
+  const orgMax = parseFloat($('orgMax').value || 13.5);
+  const yShift = parseFloat($('yShift').value || 0);
+  const brandShift = parseFloat($('brandShift').value || 0);
+  const eventHtml = escapeHtml($('eventTitle').value.trim()).replace(/\n/g,'<br>');
+  const logoTag = logoDataUrl ? `<img class="brandLogo" style="width:${logoW/210*100}%;" src="${logoDataUrl}">` : '';
+  const sheet = document.querySelector('.sheet');
+  if (sheet) {
+    const bs = $('borderStyle')?.value || 'cut';
+    sheet.style.border = bs === 'none' ? '0' : (bs === 'light' ? '1px solid #b8c1cc' : '1.2px solid #222');
+  }
+  const panel = () => `
+    ${$('drawAccentLine').checked ? `<div class="accent" style="background:${accent}; bottom:${34+brandShift*0.75}%;"></div>` : ''}
+    <div class="person" style="bottom:${42+yShift*0.75}%;"><div class="pname" style="font-size:clamp(17px, ${nameMax/31*4.3}vw, ${nameMax*1.45}px);">${escapeHtml(normalizedName(p.name))}</div><div class="porg" style="font-size:clamp(8px, ${orgMax/13.5*1.5}vw, ${orgMax*1.25}px);">${escapeHtml(p.org)}</div></div>
+    <div class="brand" style="bottom:${10+brandShift*0.75}%;">${logoTag}<div class="brandTitle" style="font-size:clamp(8px, ${eventSize/8.8*1.3}vw, ${eventSize*1.7}px);">${eventHtml}</div></div>`;
+  $('prevTop').innerHTML = panel();
+  $('prevBottom').innerHTML = panel();
+  checkLayoutWarning(p);
+}
+function checkLayoutWarning(p) {
+  const msg = [];
+  if (String($('eventTitle').value).length > 120 && parseFloat($('eventSize').value) > 9 && $('eventLines').value === '2') msg.push('Long event title: use 3 title lines or reduce event font size if it feels crowded.');
+  if (String(p.org).length > 68 && parseFloat($('orgMax').value) > 13) msg.push('Long organisation: organisation font will shrink or wrap in the PDF.');
+  const box = $('layoutWarning');
+  if (msg.length) { box.textContent = msg.join(' '); box.style.display = 'block'; } else { box.style.display = 'none'; }
+}
 function fitFont(text, font, maxWidth, start, min) {
   let size = start;
-  while (size > min && font.widthOfTextAtSize(text, size) > maxWidth) size -= 1;
+  while (size > min && font.widthOfTextAtSize(text, size) > maxWidth) size -= 0.5;
   return size;
 }
-
-async function embedLogo(pdfDoc) {
-  if (!logoBytes) return null;
-  try { return logoType === 'png' ? await pdfDoc.embedPng(logoBytes) : await pdfDoc.embedJpg(logoBytes); }
-  catch(e) { setStatus('Logo could not be embedded. The PDF will be generated without it.'); return null; }
-}
-
-function drawTextCenter(page, text, font, size, xCenter, y, opts={}) {
-  const width = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x:xCenter-width/2, y, size, font, color:opts.color||BLACK, rotate:opts.rotate||degrees(0) });
-}
-
-function drawRotatedTextCenter(page, text, font, size, xCenter, yFromTop, opts={}) {
-  const width = font.widthOfTextAtSize(text, size);
-  // Desired visual center in top panel local coords; rotate text 180 so it reads after folding.
-  const x = W - (xCenter - width/2);
-  const y = H - yFromTop;
-  page.drawText(text, { x, y, size, font, color:opts.color||BLACK, rotate:degrees(180) });
-}
-
-function drawMultilineEvent(page, lines, font, size, x, y, maxWidth, rotated=false) {
-  const lineGap = size * 1.18;
-  lines.forEach((line, i) => {
-    const w = font.widthOfTextAtSize(line, size);
-    if (rotated) page.drawText(line, { x: W - (x - w/2), y: H - (y - i*lineGap), size, font, color:BLUE, rotate:degrees(180) });
-    else page.drawText(line, { x: x - w/2, y: y - i*lineGap, size, font, color:BLUE });
-  });
-}
-
-function wrapEventText(text, font, size, maxWidth) {
-  const raw = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+function wrapTextAll(text, font, size, maxWidth) {
+  const parts = String(text).split(/\n+/).map(s=>s.trim()).filter(Boolean);
   const lines = [];
-  for (const para of raw) {
+  for (const para of parts) {
     let cur='';
     for (const word of para.split(/\s+/)) {
       const test = cur ? cur + ' ' + word : word;
@@ -179,101 +328,150 @@ function wrapEventText(text, font, size, maxWidth) {
     }
     if (cur) lines.push(cur);
   }
-  return lines.slice(0,3);
+  return lines;
 }
-
+function wrapText(text, font, size, maxWidth, maxLines=3) {
+  return wrapTextAll(text, font, size, maxWidth).slice(0, maxLines);
+}
+function fitWrappedLines(text, font, startSize, minSize, maxWidth, maxLines) {
+  let size = startSize;
+  while (size >= minSize) {
+    const lines = wrapTextAll(text, font, size, maxWidth);
+    if (lines.length <= maxLines) return {size, lines};
+    size -= 0.35;
+  }
+  const all = wrapTextAll(text, font, minSize, maxWidth);
+  return {size:minSize, lines:all.slice(0, maxLines)};
+}
 async function loadFontBytes(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('Could not load Unicode font. Please check your internet connection.');
   return await res.arrayBuffer();
 }
-
 async function embedUnicodeFonts(pdfDoc) {
-  // Noto Sans supports Balkan/European characters such as č, ć, đ, š, ž, ț, ă, ë, etc.
   pdfDoc.registerFontkit(fontkit);
-  const base = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/';
-  const [regularBytes, boldBytes, italicBytes] = await Promise.all([
-    loadFontBytes(base + 'NotoSans-Regular.ttf'),
-    loadFontBytes(base + 'NotoSans-Bold.ttf'),
-    loadFontBytes(base + 'NotoSans-Italic.ttf')
+  const sans = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/';
+  const serif = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSerif/';
+  const [regularBytes, boldBytes, semiBoldBytes, italicBytes] = await Promise.all([
+    loadFontBytes(sans + 'NotoSans-Regular.ttf'),
+    loadFontBytes(sans + 'NotoSans-Bold.ttf'),
+    loadFontBytes(sans + 'NotoSans-SemiBold.ttf'),
+    loadFontBytes(serif + 'NotoSerif-Italic.ttf')
   ]);
   return {
     regular: await pdfDoc.embedFont(regularBytes, { subset: true }),
     bold: await pdfDoc.embedFont(boldBytes, { subset: true }),
+    semibold: await pdfDoc.embedFont(semiBoldBytes, { subset: true }),
     italic: await pdfDoc.embedFont(italicBytes, { subset: true })
   };
 }
-
-async function buildPdf(editable=false) {
-  const data = participantData();
-  if (!data.length) throw new Error('No participant data selected.');
-  const pdfDoc = await PDFDocument.create();
-  const { regular, bold, italic } = await embedUnicodeFonts(pdfDoc);
-  const logo = await embedLogo(pdfDoc);
-  let form = editable ? pdfDoc.getForm() : null;
+async function embedLogo(pdfDoc) {
+  if (!logoBytes) return null;
+  try { return logoType === 'png' ? await pdfDoc.embedPng(logoBytes) : await pdfDoc.embedJpg(logoBytes); }
+  catch(e) { setStatus('Logo could not be embedded. The PDF will be generated without it.'); return null; }
+}
+function drawCenter(page, text, font, size, xCenter, y, color=BLACK) {
+  const w = font.widthOfTextAtSize(text, size);
+  page.drawText(text, { x:xCenter-w/2, y, size, font, color });
+}
+function drawCenterRotated(page, text, font, size, xCenter, y, color=BLACK) {
+  const w = font.widthOfTextAtSize(text, size);
+  page.drawText(text, { x: W - (xCenter - w/2), y: H - y, size, font, color, rotate:degrees(180) });
+}
+function drawImageRotated180(page, img, x, y, width, height) {
+  // Match the same visual position after the 180° rotation of the top panel.
+  page.drawImage(img, { x:W-x, y:H-y, width, height, rotate:degrees(180) });
+}
+function drawPanelContent(page, p, fonts, logo, accent, rotated=false) {
+  const logoWmm = parseFloat($('logoMm').value || '24');
+  let logoW=0, logoH=0;
+  const baseLogoW = logoWmm * MM;
+  const baseLogoH = Math.min(14, logoWmm * .58) * MM;
+  if (logo) {
+    const scale = Math.min(baseLogoW / logo.width, baseLogoH / logo.height);
+    logoW = logo.width * scale;
+    logoH = logo.height * scale;
+  }
   const eventText = $('eventTitle').value.trim();
-  const eventFontSize = 9.5;
-  const logoW = 23*MM, logoH = logo ? logoW * (logo.height/logo.width) : 0;
-  const logoX = 18*MM;
-  const eventLeft = logo ? 45*MM : 12*MM;
-  const eventRight = 198*MM;
-  const eventCenter = (eventLeft + eventRight)/2;
-  const eventMaxWidth = eventRight - eventLeft;
-  const eventLines = wrapEventText(eventText, italic, eventFontSize, eventMaxWidth);
+  const eventMaxWidth = logo ? (178*MM - logoW - 6*MM) : 178*MM;
+  const eventStart = parseFloat($('eventSize').value || '8.8');
+  const maxEventLines = parseInt($('eventLines')?.value || '2', 10);
+  const fitted = fitWrappedLines(eventText, fonts.italic, eventStart, 5.8, eventMaxWidth, maxEventLines);
+  const eventLineGap = fitted.size * 1.18;
+  const eventBlockH = fitted.lines.length * eventLineGap;
+  const logoX = 19*MM;
+  const brandShift = parseFloat($('brandShift').value || '0') * MM;
+  const logoY = 6.2*MM + brandShift;
+  const eventCenterX = logo ? (logoX + logoW + 6*MM + eventMaxWidth/2) : W/2;
+  const eventBaseY = 13.4*MM + brandShift + (eventBlockH > 10 ? 1.3*MM : 0);
+  const lineY = 21.1*MM + brandShift;
+  const nameRaw = p.name || '';
+  const name = normalizedName(nameRaw);
+  const org = p.org || '';
+  const yShift = parseFloat($('yShift').value || '0') * MM;
+  const nameSize = fitFont(name, fonts.bold, 174*MM, parseFloat($('nameMax').value || '31'), 15.5);
+  const orgMax = parseFloat($('orgMax').value || '13.5');
+  let orgFit = fitWrappedLines(org, fonts.semibold, orgMax, 8.0, 172*MM, 2);
+  const nameY = 35.0*MM + yShift;
+  const orgFirstY = 27.0*MM + yShift;
+  const orgLineGap = orgFit.size * 1.13;
 
-  data.forEach((p, idx) => {
-    const page = pdfDoc.addPage([W, H]);
-    page.drawRectangle({ x:0.75*MM, y:0.75*MM, width:W-1.5*MM, height:H-1.5*MM, borderColor:rgb(.2,.2,.2), borderWidth:.35 });
-
-    // Bottom panel, right-side-up
-    if (logo) page.drawImage(logo, { x:logoX, y:16*MM, width:logoW, height:logoH });
-    drawMultilineEvent(page, eventLines, italic, eventFontSize, eventCenter, 19*MM, eventMaxWidth, false);
-
-    // Top panel, rotated 180. Local coordinates are measured from the top edge after folding.
-    if (logo) page.drawImage(logo, { x:W-logoX-logoW, y:H-16*MM-logoH, width:logoW, height:logoH, rotate:degrees(180) });
-    drawMultilineEvent(page, eventLines, italic, eventFontSize, eventCenter, 19*MM, eventMaxWidth, true);
-
-    const nameSize = fitFont(p.name, bold, 160*MM, 31, 14);
-    const orgSize = fitFont(p.org, bold, 160*MM, 17, 9);
-
-    if (!editable) {
-      drawTextCenter(page, p.name, bold, nameSize, W/2, 36*MM);
-      drawTextCenter(page, p.org, bold, orgSize, W/2, 27*MM);
-      drawRotatedTextCenter(page, p.name, bold, nameSize, W/2, 36*MM);
-      drawRotatedTextCenter(page, p.org, bold, orgSize, W/2, 27*MM);
-    } else {
-      const nameField = form.createTextField(`name_${idx+1}`);
-      nameField.setText(p.name);
-      nameField.addToPage(page, { x:20*MM, y:34*MM, width:170*MM, height:10*MM, textColor:BLACK, font:bold, fontSize:nameSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(0) });
-      nameField.addToPage(page, { x:20*MM, y:H-44*MM, width:170*MM, height:10*MM, textColor:BLACK, font:bold, fontSize:nameSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(180) });
-      nameField.enableReadOnly(); nameField.disableReadOnly();
-      const orgField = form.createTextField(`organisation_${idx+1}`);
-      orgField.setText(p.org);
-      orgField.addToPage(page, { x:30*MM, y:25*MM, width:150*MM, height:7*MM, textColor:BLACK, font:bold, fontSize:orgSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(0) });
-      orgField.addToPage(page, { x:30*MM, y:H-32*MM, width:150*MM, height:7*MM, textColor:BLACK, font:bold, fontSize:orgSize, borderWidth:0, backgroundColor:undefined, rotate:degrees(180) });
+  if (!rotated) {
+    if ($('drawAccentLine').checked) page.drawLine({ start:{x:18*MM, y:lineY}, end:{x:192*MM, y:lineY}, thickness:0.45, color:accent, opacity:0.38 });
+    if (logo) page.drawImage(logo, { x:logoX, y:logoY, width:logoW, height:logoH });
+    fitted.lines.forEach((line, i) => drawCenter(page, line, fonts.italic, fitted.size, eventCenterX, eventBaseY - i*eventLineGap, accent));
+    drawCenter(page, name, fonts.bold, nameSize, W/2, nameY, BLACK);
+    orgFit.lines.forEach((line, i) => drawCenter(page, line, fonts.semibold, orgFit.size, W/2, orgFirstY - i*orgLineGap, GREY));
+  } else {
+    if ($('drawAccentLine').checked) page.drawLine({ start:{x:W-18*MM, y:H-lineY}, end:{x:W-192*MM, y:H-lineY}, thickness:0.45, color:accent, opacity:0.38 });
+    if (logo) drawImageRotated180(page, logo, logoX, logoY, logoW, logoH);
+    fitted.lines.forEach((line, i) => drawCenterRotated(page, line, fonts.italic, fitted.size, eventCenterX, eventBaseY - i*eventLineGap, accent));
+    drawCenterRotated(page, name, fonts.bold, nameSize, W/2, nameY, BLACK);
+    orgFit.lines.forEach((line, i) => drawCenterRotated(page, line, fonts.semibold, orgFit.size, W/2, orgFirstY - i*orgLineGap, GREY));
+  }
+}
+async function buildPdf(limitOne=false) {
+  let data = participantData();
+  if (!data.length) throw new Error('No participant data selected.');
+  if (limitOne) data = data.slice(0,1);
+  const pdfDoc = await PDFDocument.create();
+  const fonts = await embedUnicodeFonts(pdfDoc);
+  const logo = await embedLogo(pdfDoc);
+  const accent = hexToRgb($('accentColor').value);
+  for (const p of data) {
+    const page = pdfDoc.addPage([W,H]);
+    const bs = $('borderStyle')?.value || 'cut';
+    if (bs !== 'none') {
+      const col = bs === 'light' ? rgb(.62,.66,.72) : rgb(.18,.18,.18);
+      const bw = bs === 'light' ? .25 : .35;
+      page.drawRectangle({ x:0.75*MM, y:0.75*MM, width:W-1.5*MM, height:H-1.5*MM, borderColor:col, borderWidth:bw });
     }
-  });
-  if (editable && form) form.updateFieldAppearances(bold);
+    if ($('drawFoldMarks').checked) {
+      page.drawLine({ start:{x:0.75*MM, y:PANEL_H}, end:{x:5*MM, y:PANEL_H}, thickness:.35, color:rgb(.55,.55,.55) });
+      page.drawLine({ start:{x:W-5*MM, y:PANEL_H}, end:{x:W-0.75*MM, y:PANEL_H}, thickness:.35, color:rgb(.55,.55,.55) });
+    }
+    drawPanelContent(page, p, fonts, logo, accent, false);
+    drawPanelContent(page, p, fonts, logo, accent, true);
+  }
   return await pdfDoc.save();
 }
-
-async function downloadPdf(editable) {
+async function downloadPdf(limitOne=false) {
   try {
-    setStatus('Generating PDF...');
-    const bytes = await buildPdf(editable);
+    setStatus(limitOne ? 'Generating test page...' : 'Generating full print-ready PDF...');
+    const bytes = await buildPdf(limitOne);
     const blob = new Blob([bytes], {type:'application/pdf'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = editable ? 'name_holders_editable.pdf' : 'name_holders_print_ready.pdf';
+    a.download = limitOne ? 'name_holder_test_page.pdf' : 'name_holders_print_ready_beautiful.pdf';
     a.click();
     URL.revokeObjectURL(url);
-    setStatus('PDF generated and downloaded.');
+    setStatus(limitOne ? 'Test page generated.' : 'Full PDF generated and downloaded.');
   } catch (err) { console.error(err); setStatus('Error: ' + err.message); }
 }
-
+$('testPdfBtn').addEventListener('click', () => downloadPdf(true));
 $('printPdfBtn').addEventListener('click', () => downloadPdf(false));
-$('editablePdfBtn').addEventListener('click', () => downloadPdf(true));
+updateLivePreview();
 </script>
 </body>
 </html>
